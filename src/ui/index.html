@@ -1,0 +1,642 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DuckDB · SignalK</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg: #1a1b1e;
+  --bg2: #242528;
+  --bg3: #2e2f33;
+  --border: #3a3b3f;
+  --text: #d4d4d4;
+  --text2: #9ca3af;
+  --accent: #f5a623;
+  --accent2: #e8960f;
+  --green: #4ade80;
+  --red: #f87171;
+  --blue: #60a5fa;
+  --mono: 'Fira Mono', 'Cascadia Code', 'Consolas', monospace;
+}
+
+html, body { height: 100%; overflow: hidden; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 13px;
+  background: var(--bg);
+  color: var(--text);
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Header ── */
+header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px;
+  background: var(--bg2);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+header .logo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--accent);
+  letter-spacing: 0.02em;
+}
+
+header .logo svg { width: 20px; height: 20px; }
+
+header .run-btn {
+  margin-left: auto;
+  background: var(--accent);
+  color: #000;
+  border: none;
+  border-radius: 4px;
+  padding: 5px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+header .run-btn:hover { background: var(--accent2); }
+header .run-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+header .status {
+  font-size: 11px;
+  color: var(--text2);
+}
+
+/* ── Main layout ── */
+main {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+/* ── Sidebar ── */
+.sidebar {
+  width: 220px;
+  min-width: 160px;
+  max-width: 340px;
+  background: var(--bg2);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  resize: horizontal;
+}
+
+.sidebar-header {
+  padding: 8px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text2);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.sidebar-header button {
+  background: none;
+  border: none;
+  color: var(--text2);
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  padding: 2px;
+  border-radius: 3px;
+}
+.sidebar-header button:hover { color: var(--text); background: var(--bg3); }
+
+.schema-list {
+  overflow-y: auto;
+  flex: 1;
+  padding: 4px 0;
+}
+
+.schema-group { margin-bottom: 2px; }
+
+.schema-group-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  cursor: pointer;
+  user-select: none;
+  color: var(--text2);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.schema-group-header:hover { color: var(--text); }
+
+.schema-group-header .arrow {
+  display: inline-block;
+  width: 10px;
+  transition: transform 0.15s;
+}
+.schema-group-header.open .arrow { transform: rotate(90deg); }
+
+.schema-items { display: none; }
+.schema-items.open { display: block; }
+
+.schema-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 12px 3px 28px;
+  cursor: pointer;
+  border-radius: 3px;
+  margin: 0 4px;
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.schema-item:hover { background: var(--bg3); }
+.schema-item .badge {
+  font-size: 9px;
+  padding: 1px 4px;
+  border-radius: 3px;
+  background: var(--bg3);
+  color: var(--text2);
+  border: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.schema-item .badge.view { color: var(--blue); border-color: var(--blue); }
+.schema-item .badge.table { color: var(--green); border-color: var(--green); }
+
+.schema-cols { display: none; }
+.schema-cols.open { display: block; }
+.schema-col {
+  padding: 2px 12px 2px 40px;
+  font-size: 11px;
+  color: var(--text2);
+  font-family: var(--mono);
+}
+.schema-col .col-type { color: var(--blue); font-size: 10px; }
+
+/* ── Editor area ── */
+.editor-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.editor-wrap {
+  position: relative;
+  flex: 0 0 auto;
+  height: 180px;
+  min-height: 80px;
+  border-bottom: 1px solid var(--border);
+}
+
+textarea#sql {
+  width: 100%;
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  border: none;
+  outline: none;
+  resize: none;
+  padding: 12px 16px;
+  font-family: var(--mono);
+  font-size: 13px;
+  line-height: 1.6;
+  tab-size: 2;
+}
+
+.editor-hint {
+  position: absolute;
+  bottom: 8px;
+  right: 12px;
+  font-size: 11px;
+  color: var(--text2);
+  pointer-events: none;
+}
+
+.resize-handle {
+  height: 6px;
+  background: transparent;
+  border-bottom: 2px solid var(--border);
+  cursor: ns-resize;
+  flex-shrink: 0;
+  transition: border-color 0.15s;
+}
+.resize-handle:hover { border-color: var(--accent); }
+
+/* ── Results ── */
+.results-area {
+  flex: 1;
+  overflow: auto;
+  position: relative;
+}
+
+.results-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 12px;
+  background: var(--bg2);
+  border-bottom: 1px solid var(--border);
+  font-size: 11px;
+  color: var(--text2);
+  flex-shrink: 0;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.results-toolbar .stat { color: var(--text); }
+.results-toolbar .stat.err { color: var(--red); }
+
+.results-toolbar button {
+  margin-left: auto;
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text2);
+  border-radius: 3px;
+  padding: 2px 8px;
+  font-size: 11px;
+  cursor: pointer;
+}
+.results-toolbar button:hover { border-color: var(--text2); color: var(--text); }
+
+.results-table-wrap {
+  overflow: auto;
+  flex: 1;
+}
+
+table.results {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
+table.results th {
+  position: sticky;
+  top: 0;
+  background: var(--bg3);
+  border-bottom: 2px solid var(--border);
+  padding: 6px 10px;
+  text-align: left;
+  white-space: nowrap;
+  color: var(--text2);
+  font-weight: 600;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+table.results td {
+  padding: 4px 10px;
+  border-bottom: 1px solid var(--border);
+  max-width: 400px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text);
+}
+
+table.results tr:hover td { background: var(--bg2); }
+
+.null-val { color: var(--text2); font-style: italic; }
+
+.placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 200px;
+  color: var(--text2);
+  gap: 8px;
+}
+.placeholder svg { width: 48px; height: 48px; opacity: 0.3; }
+
+.error-box {
+  padding: 16px;
+  color: var(--red);
+  font-family: var(--mono);
+  font-size: 12px;
+  white-space: pre-wrap;
+}
+
+.spinner {
+  display: inline-block;
+  width: 14px; height: 14px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  vertical-align: middle;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <ellipse cx="12" cy="5" rx="9" ry="3"/>
+      <path d="M3 5v5c0 1.657 4.03 3 9 3s9-1.343 9-3V5"/>
+      <path d="M3 10v5c0 1.657 4.03 3 9 3s9-1.343 9-3v-5"/>
+      <path d="M3 15v4c0 1.657 4.03 3 9 3s9-1.343 9-3v-4"/>
+    </svg>
+    DuckDB · SignalK
+  </div>
+  <span class="status" id="status">Loading schema…</span>
+  <button class="run-btn" id="runBtn" onclick="runQuery()" disabled>▶ Run</button>
+</header>
+
+<main>
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      Schema
+      <button title="Refresh schema" onclick="loadSchema()">↺</button>
+    </div>
+    <div class="schema-list" id="schemaList">
+      <div class="placeholder"><span class="spinner"></span></div>
+    </div>
+  </aside>
+
+  <div class="editor-area">
+    <div class="editor-wrap" id="editorWrap">
+      <textarea id="sql" spellcheck="false" placeholder="-- Write SQL here&#10;-- Ctrl+Enter to run&#10;SELECT * FROM signalk_data LIMIT 100;"></textarea>
+      <span class="editor-hint">Ctrl+Enter to run</span>
+    </div>
+
+    <div class="resize-handle" id="resizeHandle"></div>
+
+    <div class="results-area" id="resultsArea">
+      <div class="results-toolbar" id="resultsToolbar" style="display:none"></div>
+      <div class="results-table-wrap" id="resultsTable">
+        <div class="placeholder">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M3 3h18M3 9h18M3 15h18M3 21h18M9 3v18M15 3v18"/>
+          </svg>
+          <span>Results will appear here</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script>
+// ── Resize handle ──────────────────────────────────────────
+const handle = document.getElementById('resizeHandle');
+const editorWrap = document.getElementById('editorWrap');
+let dragging = false, startY = 0, startH = 0;
+
+handle.addEventListener('mousedown', (e) => {
+  dragging = true;
+  startY = e.clientY;
+  startH = editorWrap.offsetHeight;
+  document.body.style.cursor = 'ns-resize';
+  document.body.style.userSelect = 'none';
+});
+window.addEventListener('mousemove', (e) => {
+  if (!dragging) return;
+  const h = Math.max(60, Math.min(startH + (e.clientY - startY), window.innerHeight - 120));
+  editorWrap.style.height = h + 'px';
+});
+window.addEventListener('mouseup', () => {
+  dragging = false;
+  document.body.style.cursor = '';
+  document.body.style.userSelect = '';
+});
+
+// ── Keyboard shortcut ──────────────────────────────────────
+document.getElementById('sql').addEventListener('keydown', (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+    e.preventDefault();
+    runQuery();
+  }
+  // Tab → spaces
+  if (e.key === 'Tab') {
+    e.preventDefault();
+    const ta = e.target;
+    const s = ta.selectionStart, end = ta.selectionEnd;
+    ta.value = ta.value.slice(0, s) + '  ' + ta.value.slice(end);
+    ta.selectionStart = ta.selectionEnd = s + 2;
+  }
+});
+
+// ── Schema ─────────────────────────────────────────────────
+async function loadSchema() {
+  const list = document.getElementById('schemaList');
+  list.innerHTML = '<div class="placeholder"><span class="spinner"></span></div>';
+  try {
+    const r = await fetch('/schema');
+    const schema = await r.json();
+    renderSchema(schema);
+    document.getElementById('status').textContent = `${schema.length} object(s)`;
+    document.getElementById('runBtn').disabled = false;
+  } catch (e) {
+    list.innerHTML = `<div class="error-box">Failed to load schema:\n${e}</div>`;
+    document.getElementById('status').textContent = 'Schema error';
+  }
+}
+
+function renderSchema(schema) {
+  const list = document.getElementById('schemaList');
+  if (!schema.length) {
+    list.innerHTML = '<div class="placeholder"><span>No objects found</span></div>';
+    return;
+  }
+
+  const views = schema.filter(o => o.type === 'view');
+  const tables = schema.filter(o => o.type === 'table');
+
+  list.innerHTML = '';
+  if (views.length) list.appendChild(renderGroup('Views', views, 'view'));
+  if (tables.length) list.appendChild(renderGroup('Tables', tables, 'table'));
+}
+
+function renderGroup(label, items, type) {
+  const group = document.createElement('div');
+  group.className = 'schema-group';
+
+  const header = document.createElement('div');
+  header.className = 'schema-group-header open';
+  header.innerHTML = `<span class="arrow">▶</span>${label} <span style="color:var(--text2)">(${items.length})</span>`;
+
+  const itemsEl = document.createElement('div');
+  itemsEl.className = 'schema-items open';
+
+  header.addEventListener('click', () => {
+    header.classList.toggle('open');
+    itemsEl.classList.toggle('open');
+  });
+
+  items.forEach(obj => {
+    const item = document.createElement('div');
+    item.className = 'schema-item';
+    item.title = obj.name;
+    item.innerHTML = `<span class="badge ${type}">${type[0].toUpperCase()}</span>${obj.name}`;
+
+    const cols = document.createElement('div');
+    cols.className = 'schema-cols';
+
+    if (obj.columns && obj.columns.length) {
+      obj.columns.forEach(c => {
+        const col = document.createElement('div');
+        col.className = 'schema-col';
+        col.innerHTML = `${c.name} <span class="col-type">${c.type}</span>`;
+        cols.appendChild(col);
+      });
+    }
+
+    item.addEventListener('click', () => {
+      cols.classList.toggle('open');
+    });
+    item.addEventListener('dblclick', () => {
+      insertText(`SELECT * FROM "${obj.name}" LIMIT 100;`);
+    });
+
+    itemsEl.appendChild(item);
+    itemsEl.appendChild(cols);
+  });
+
+  group.appendChild(header);
+  group.appendChild(itemsEl);
+  return group;
+}
+
+function insertText(text) {
+  const ta = document.getElementById('sql');
+  ta.value = text;
+  ta.focus();
+}
+
+// ── Query ──────────────────────────────────────────────────
+let lastResult = null;
+
+async function runQuery() {
+  const sql = document.getElementById('sql').value.trim();
+  if (!sql) return;
+
+  const runBtn = document.getElementById('runBtn');
+  runBtn.disabled = true;
+  runBtn.textContent = '…';
+
+  const toolbar = document.getElementById('resultsToolbar');
+  const table = document.getElementById('resultsTable');
+  toolbar.style.display = 'flex';
+  toolbar.innerHTML = '<span class="spinner"></span> Running…';
+  table.innerHTML = '';
+
+  try {
+    const r = await fetch('/query', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sql }),
+    });
+    const data = await r.json();
+
+    if (data.error) {
+      toolbar.innerHTML = `<span class="stat err">Error</span>`;
+      table.innerHTML = `<div class="error-box">${escHtml(data.error)}</div>`;
+    } else {
+      lastResult = data;
+      toolbar.innerHTML = `
+        <span class="stat">${data.rowCount} row${data.rowCount !== 1 ? 's' : ''}</span>
+        <span>·</span>
+        <span>${data.durationMs}ms</span>
+        <button onclick="copyCSV()">Copy CSV</button>
+      `;
+      renderTable(data);
+    }
+  } catch (e) {
+    toolbar.innerHTML = `<span class="stat err">Request failed</span>`;
+    table.innerHTML = `<div class="error-box">${escHtml(String(e))}</div>`;
+  }
+
+  runBtn.disabled = false;
+  runBtn.textContent = '▶ Run';
+}
+
+function renderTable({ columns, rows }) {
+  if (!columns.length) {
+    document.getElementById('resultsTable').innerHTML =
+      '<div class="placeholder"><span>Query executed — no columns returned</span></div>';
+    return;
+  }
+
+  const wrap = document.createElement('div');
+  wrap.className = 'results-table-wrap';
+  const t = document.createElement('table');
+  t.className = 'results';
+
+  const thead = document.createElement('thead');
+  const hr = document.createElement('tr');
+  columns.forEach(c => {
+    const th = document.createElement('th');
+    th.textContent = c;
+    hr.appendChild(th);
+  });
+  thead.appendChild(hr);
+  t.appendChild(thead);
+
+  const tbody = document.createElement('tbody');
+  rows.forEach(row => {
+    const tr = document.createElement('tr');
+    row.forEach(cell => {
+      const td = document.createElement('td');
+      if (cell === null || cell === undefined) {
+        td.innerHTML = '<span class="null-val">null</span>';
+      } else {
+        td.textContent = String(cell);
+        td.title = String(cell);
+      }
+      tr.appendChild(td);
+    });
+    tbody.appendChild(tr);
+  });
+  t.appendChild(tbody);
+  wrap.appendChild(t);
+
+  document.getElementById('resultsTable').replaceChildren(wrap);
+}
+
+function copyCSV() {
+  if (!lastResult) return;
+  const { columns, rows } = lastResult;
+  const lines = [columns.join(',')];
+  rows.forEach(row => {
+    lines.push(row.map(c => {
+      if (c === null || c === undefined) return '';
+      const s = String(c);
+      return s.includes(',') || s.includes('"') || s.includes('\n')
+        ? `"${s.replace(/"/g, '""')}"`
+        : s;
+    }).join(','));
+  });
+  navigator.clipboard.writeText(lines.join('\n'));
+}
+
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ── Init ──────────────────────────────────────────────────
+loadSchema();
+</script>
+</body>
+</html>
