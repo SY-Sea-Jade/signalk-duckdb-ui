@@ -14,10 +14,10 @@ function serveUi(_req: express.Request, res: express.Response): void {
   }
 }
 
-// Attach API + UI routes to a router provided by SignalK's registerWithRouter.
-// Note: SignalK already owns GET / on the plugin router (returns plugin metadata),
-// so the UI is served at GET /ui instead.
-export function setupRoutes(
+// Attach UI + REST API routes to a SignalK plugin router.
+// Note: SignalK owns GET / on the plugin router (returns plugin metadata JSON),
+// so the UI lives at GET /ui instead.
+export function setupApiRoutes(
   router: express.IRouter,
   getDuckdb: () => DuckDbManager | null,
 ): void {
@@ -48,14 +48,14 @@ export function setupRoutes(
   });
 }
 
+// Standalone HTTP server for direct access on the configured port.
 export class ApiServer {
   private server: http.Server | null = null;
 
   start(port: number, getDuckdb: () => DuckDbManager | null, log: (msg: string) => void): void {
     const app = express();
-    // Standalone server owns GET /, so serve the UI there too
-    app.get('/', serveUi);
-    setupRoutes(app, getDuckdb);
+    app.get('/', serveUi);        // standalone owns GET /
+    setupApiRoutes(app, getDuckdb); // also adds /ui, /query, /schema
     this.server = app.listen(port, () => {
       log(`DuckDB UI available at http://localhost:${port}/`);
     });
