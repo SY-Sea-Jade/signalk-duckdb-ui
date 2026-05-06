@@ -18,7 +18,7 @@ const PLUGIN_ID = 'signalk-duckdb-ui';
 module.exports = function (app: any) {
   const plugin: any = {
     id: PLUGIN_ID,
-    name: 'DuckDB UI',
+    name: 'DuckDB Web Query',
     description: 'DuckDB SQL interface for SignalK data (parquet archives, History API, and more)',
   };
 

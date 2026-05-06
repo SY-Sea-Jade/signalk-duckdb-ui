@@ -6,33 +6,30 @@ import type { DuckDbManager } from './duckdb-manager';
 
 const uiPath = path.join(__dirname, 'ui', 'index.html');
 
-// Attach query + schema + UI routes to any Express router/app.
-// getDuckdb() may return null if the plugin hasn't been started yet.
+function serveUi(_req: express.Request, res: express.Response): void {
+  if (fs.existsSync(uiPath)) {
+    res.sendFile(uiPath);
+  } else {
+    res.status(503).send('UI not found — run npm run build');
+  }
+}
+
+// Attach API + UI routes to a router provided by SignalK's registerWithRouter.
+// Note: SignalK already owns GET / on the plugin router (returns plugin metadata),
+// so the UI is served at GET /ui instead.
 export function setupRoutes(
   router: express.IRouter,
   getDuckdb: () => DuckDbManager | null,
 ): void {
   router.use(express.json({ limit: '1mb' }));
 
-  router.get('/', (_req, res) => {
-    if (fs.existsSync(uiPath)) {
-      res.sendFile(uiPath);
-    } else {
-      res.status(503).send('UI not found — run npm run build');
-    }
-  });
+  router.get('/ui', serveUi);
 
   router.post('/query', async (req: express.Request, res: express.Response) => {
     const db = getDuckdb();
-    if (!db) {
-      res.status(503).json({ error: 'Plugin is not running' });
-      return;
-    }
+    if (!db) { res.status(503).json({ error: 'Plugin is not running' }); return; }
     const sql: string = req.body?.sql ?? '';
-    if (!sql.trim()) {
-      res.status(400).json({ error: 'No SQL provided' });
-      return;
-    }
+    if (!sql.trim()) { res.status(400).json({ error: 'No SQL provided' }); return; }
     try {
       res.json(await db.query(sql));
     } catch (err) {
@@ -42,10 +39,7 @@ export function setupRoutes(
 
   router.get('/schema', async (_req: express.Request, res: express.Response) => {
     const db = getDuckdb();
-    if (!db) {
-      res.status(503).json({ error: 'Plugin is not running' });
-      return;
-    }
+    if (!db) { res.status(503).json({ error: 'Plugin is not running' }); return; }
     try {
       res.json(await db.getSchema());
     } catch (err) {
@@ -59,6 +53,8 @@ export class ApiServer {
 
   start(port: number, getDuckdb: () => DuckDbManager | null, log: (msg: string) => void): void {
     const app = express();
+    // Standalone server owns GET /, so serve the UI there too
+    app.get('/', serveUi);
     setupRoutes(app, getDuckdb);
     this.server = app.listen(port, () => {
       log(`DuckDB UI available at http://localhost:${port}/`);

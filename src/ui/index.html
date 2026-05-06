@@ -399,6 +399,13 @@ table.results tr:hover td { background: var(--bg2); }
 </main>
 
 <script>
+// ── API base URL ───────────────────────────────────────────
+// Works whether served from standalone '/' or SignalK '/plugins/signalk-duckdb-ui/ui'
+const API = (() => {
+  const p = window.location.pathname.replace(/\/$/, '');
+  return p.endsWith('/ui') ? p.slice(0, -2) + '/' : '/';
+})();
+
 // ── Resize handle ──────────────────────────────────────────
 const handle = document.getElementById('resizeHandle');
 const editorWrap = document.getElementById('editorWrap');
@@ -443,7 +450,7 @@ async function loadSchema() {
   const list = document.getElementById('schemaList');
   list.innerHTML = '<div class="placeholder"><span class="spinner"></span></div>';
   try {
-    const r = await fetch('./schema');
+    const r = await fetch(API + 'schema');
     const schema = await r.json();
     renderSchema(schema);
     document.getElementById('status').textContent = `${schema.length} object(s)`;
@@ -543,7 +550,7 @@ async function runQuery() {
   table.innerHTML = '';
 
   try {
-    const r = await fetch('./query', {
+    const r = await fetch(API + 'query', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ sql }),
