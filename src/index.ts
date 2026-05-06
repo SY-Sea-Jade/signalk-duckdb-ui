@@ -1,5 +1,5 @@
 import { DuckDbManager } from './duckdb-manager';
-import { ApiServer } from './api-server';
+import { ApiServer, setupRoutes } from './api-server';
 import { ParquetSource } from './sources/parquet-source';
 import type { DataSource } from './sources/types';
 
@@ -24,6 +24,13 @@ module.exports = function (app: any) {
 
   let duckdb: DuckDbManager | null = null;
   let apiServer: ApiServer | null = null;
+  const getDuckdb = () => duckdb;
+
+  // Mount routes on SignalK's own Express server at /plugins/signalk-duckdb-ui/
+  // This is called at plugin load time, before start(), so getDuckdb() may return null.
+  plugin.registerWithRouter = function (router: any) {
+    setupRoutes(router, getDuckdb);
+  };
 
   plugin.schema = {
     type: 'object',
@@ -32,7 +39,8 @@ module.exports = function (app: any) {
       port: {
         type: 'number',
         title: 'Web port',
-        description: 'Port to serve the DuckDB SQL UI on',
+        description:
+          'Additional standalone port for direct access. The UI is also available via the SignalK server at /plugins/signalk-duckdb-ui/',
         default: 4213,
       },
       sources: {
@@ -79,10 +87,12 @@ module.exports = function (app: any) {
     duckdb = new DuckDbManager();
     await duckdb.start(sources, log);
 
-    apiServer = new ApiServer(duckdb);
-    apiServer.start(listenPort, log);
+    apiServer = new ApiServer();
+    apiServer.start(listenPort, getDuckdb, log);
 
-    app.setPluginStatus(`DuckDB UI running at http://localhost:${listenPort}/`);
+    app.setPluginStatus(
+      `DuckDB UI: /plugins/${PLUGIN_ID}/ or http://localhost:${listenPort}/`,
+    );
   };
 
   plugin.stop = async function (): Promise<void> {

@@ -443,7 +443,7 @@ async function loadSchema() {
   const list = document.getElementById('schemaList');
   list.innerHTML = '<div class="placeholder"><span class="spinner"></span></div>';
   try {
-    const r = await fetch('/schema');
+    const r = await fetch('./schema');
     const schema = await r.json();
     renderSchema(schema);
     document.getElementById('status').textContent = `${schema.length} object(s)`;
@@ -543,7 +543,7 @@ async function runQuery() {
   table.innerHTML = '';
 
   try {
-    const r = await fetch('/query', {
+    const r = await fetch('./query', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ sql }),
